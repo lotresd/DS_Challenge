@@ -1,0 +1,430 @@
+---
+title: "DATA SCIENTIST CHALLENGE"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+## 1. Librerias a utilizar
+  
+```{r Libraries, echo=TRUE, message=FALSE, warning=FALSE}
+library(data.table)
+library(ggplot2)
+library(rstudioapi)
+library(ggpubr)
+library(dplyr)
+library(party)
+library(reshape2)
+library(MLmetrics)
+library(caret)
+library(cluster)
+require(caTools)
+library(ROCR)
+```
+
+
+## 2.Carga del dataset 
+
+
+```{r read_data, echo=TRUE, message=FALSE, warning=FALSE}
+
+#Se lee la data
+
+path <- "E:/Data_Science/Nala_test/nala.csv"
+
+df_datos <- read.csv(path)
+
+#Se transforma la variable de ID_USER por el nombre correcto
+
+df_datos$ID_USER <- df_datos$ï..ID_USER
+
+df_datos$ï..ID_USER <- NULL
+```
+\  
+## 3. Missings en las variables
+\  
+```{r echo=TRUE}
+colSums(is.na(df_datos))
+```
+
+
+## 4. Análisis Univariado Cuantitativo 
+
+
+```{r echo=TRUE}
+
+# Se define una función para analizar las variables cuantitativas
+f_Ana_Uni_Cuan <- function(df,variable){
+  g1 <- ggplot(data = df)+
+    geom_histogram(mapping = aes(x = get(variable)),color='darkblue',fill="gray")+
+    xlab(variable)+
+    ylab("N")+
+    theme_classic()
+  
+  g2 <- ggplot(data = df)+
+    geom_boxplot(mapping = aes(x = get(variable)),color='darkblue',fill="gray")+
+    xlab(variable)+
+    ylab("N")
+  
+  plots <- ggarrange(plotlist = list(g1,g2), labels = c("Histograma","Boxplot"),
+                     ncol = 2, hjust = -2.4)
+  
+  dt_Est_Descr <- df %>%
+    select(variable)
+  dt_Est_Descr <- t(as.matrix(summary(dt_Est_Descr)))
+  
+  return(list(graficos = plots,
+              Est_Desc = copy(dt_Est_Descr)))
+}
+
+
+```
+
+### Variable Monto
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cuan(df_datos,"monto")
+```
+SE VE UNA DISTRIBUCION UNIFORME, SIN PRESENCIA DE OUTLIERS  
+
+### Variable Linea TC
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cuan(df_datos,"linea_tc")
+```
+SE TIENE UNA DISTRIBUCION SIMETRICA MULTIMODAL SIN PRESENCIA DE OUTLIERS  
+
+### Variable Interes TC
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cuan(df_datos,"interes_tc")
+```
+
+SE TIENE UNA DISTRIBUCION SIMETRICA MULTIMODAL SIN PRESENCIA DE OUTLIERS  
+
+### Variable Descuento(dcto)
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cuan(df_datos,"dcto")
+```
+SE TIENE UNA DISTRIBUCION ASIMETRICA POSITIVA CON ALTA PRESENCIA DE OUTLIERS   
+
+
+### Variable Cashback
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cuan(df_datos,"cashback")
+```
+SE TIENE UNA DISTRIBUCION ASIMETRICA POSITIVA SIN PRESENCIA DE OUTLIERS   
+
+### Variable Hora
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cuan(df_datos,"hora")
+```
+SE TIENE UNA DISTRIBUCION SIMETRICA UNIFORME  SIN PRESENCIA DE OUTLIERS   
+
+
+
+## 5. Análisis Univariado Cualitativo
+
+
+```{r echo=TRUE}
+
+# Se define una función para analizar las variables cualitativas
+f_Ana_Uni_Cual <- function(df,variable){
+  
+  summary_var <- df%>%
+    group_by(get(variable))%>%
+    summarise(porc = round(100*n()/nrow(df),2))
+  
+  g <- ggplot(df)
+  g <- g + geom_bar(aes(x = as.factor(get(variable))), stat = "count")
+  g <- g + xlab(variable)
+  g <- g + ylab("N")
+  
+  return(list(summary_var,g))
+}
+
+
+```  
+
+### Variable Genero  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"genero")
+```  
+  
+EL 50% DE LAS TRANSACCIONES SON REALIZADAS POR MUJERES  
+
+### Variable Establecimiento  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"establecimiento")
+```  
+   
+SE TIENE UN 37% QUE NO SE DEFINE EL ESTABLECIMIENTO, EL RESTO SE DISTRIBUYE DE MANERA UNIFORME  
+
+### Variable Ciudad  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"ciudad")
+```
+    
+SE TIENE UN 37% QUE NO SE DEFINE CIUDAD, EL RESTO SE DISTRIBUYE DE MANERA UNIFORME  
+
+### Variable Tipo TC  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"tipo_tc")
+```  
+EL 70% SON TARJETAS FISICAS  
+  
+### Variable Status TxN  
+ 
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"status_txn")
+```
+    
+EL 10% DE LAS TRANSACCIONES REALIZADAS HAN SIDO RECHAZADAS    
+
+### Variable Primera vez de uso(is_prime)  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"is_prime")
+```  
+ 
+EL 13% DE LAS OPERACIONES FUERON EL PRIMER USO DE LA TARJETA  
+
+### Variable Fraude  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+f_Ana_Uni_Cual(df_datos,"fraude")
+```  
+
+EL 3% DE LAS OPERACIONES FUERON VICTIMAS DE FRAUDES  
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Se separan las variables cualitativas y cuantitativas
+
+variables_cuant <- c("monto","linea_tc","interes_tc","dcto","cashback")
+variables_cual <- c("genero","establecimiento","ciudad","tipo_tc","fraude")
+```
+
+
+## 6. Análisis Bivariado
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Funcion para análisis bivariado con variables cuantitativas
+
+biv_cuan_variables <- function(df,target,variable_cuant){
+  
+  g1 <- ggplot(data = df)+
+    geom_density(mapping = aes(x = get(variable_cuant), colour = fraude),fill="gray")+
+    xlab(variable_cuant)+
+    ylab("density")+
+    theme_classic()
+  
+  return(g1)
+}
+
+#Funcion para análisis bivariado con variables cualitativas
+
+biv_cual_variables <- function(df,target,variable_cual){
+  
+  g1 <- ggplot(data = df)+
+    geom_bar(mapping = aes(x = get(variable_cual), fill = fraude),position = position_fill())+
+    scale_y_continuous(labels = scales::percent_format())+
+    xlab(variable_cual)+
+    ylab("density")+
+    theme_classic()
+  
+  tab <- table(df[,c(variable_cual,"fraude")])
+  
+  print(tab)
+  return(g1)
+}
+
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cuan_variables(df_datos,"fraude","monto")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cuan_variables(df_datos,"fraude","hora")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cuan_variables(df_datos,"fraude","linea_tc")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cuan_variables(df_datos,"fraude","interes_tc")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cuan_variables(df_datos,"fraude","interes_tc")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cual_variables(df_datos,"fraude","genero")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cual_variables(df_datos,"fraude","ciudad")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cual_variables(df_datos,"fraude","establecimiento")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+biv_cual_variables(df_datos,"fraude","tipo_tc")
+```
+
+
+#### De los gráficos bivariados se pueden obtener las siguientes conclusiones
+* Las variables cuantitativas presentan una distribución
+* Las variables cualitativas no presentan mucha discriminación respecto a la variable fraude(target)
+
+
+## 7. Clusterización de Clientes(Segmentación)
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Obtenemos la matriz de Correlacion para determinar qué variables se incluirán
+
+cor(df_datos[,variables_cuant])
+
+```  
+
+De la matriz se observa que ninguna supera en valor absoluto el 0.5, entonces no se descarta ninguna
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#SE NORMALIZA LAS VARIABLES NUMERICAS
+
+preproc1 <- preProcess(df_datos[,variables_cuant], method=c("center", "scale"))
+
+norm1 <- predict(preproc1, df_datos[,variables_cuant])
+
+#SE REALIZA MERGE CON LA VARIABLE DE TIPO_TC QUE TAMBIÉN SE UTILIZARÁ PARA CLUSTERIZAR
+
+norm1$tipo_tc <- ifelse(df_datos$tipo_tc=="Virtual",1,0)
+
+#CLUSTERS MEDIANTE K MEANS
+set.seed(567)
+
+km.res <- kmeans(norm1, 4, nstart = 25)
+
+#SE VISUALIZA LOS RESULTOS Y LOS CENTROS PARA OBTENER DESCRIPTIVOS
+
+print(km.res$centers)
+
+```  
+
+### Determinamos 4 segmentos de clientes, los cuales son:
+* Perfil 1:Clientes con baja linea de TC(riesgosos), bajo monto de consumo y alta tasa de interes    
+* Perfil 2:Clientes con baja linea de TC(riesgosos), alto monto de consumo y con tarjeta fisica  
+* Perfil 3:Clientes con alta linea de TC(riesgosos), bajo monto de consumo y con tarjeta fisica  
+* Perfil 4:Clientes con linea de TC(riesgosos) media, alto monto de consumo y mayores descuentos
+
+Analizando los distntos clusters se puede determinar que el perfil correspondiente a cada uno sería:
+
+* Clientes conservadores linea baja
+* Clientes con Mora potencial
+* Clientes Afluentes - Se tendría que determinar por qué no consumen más y presentar más ofertas.
+* Clientes connservadores linea alta
+
+
+## 8. Modelo de prevención de fraude
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Con la data normalizada y considerando las variables que presentan mayor discriminación respecto a la variable fraude se ejecuta un Logit
+
+norm1$fraude <- ifelse(df_datos$fraude==FALSE,0,1)
+
+#Se divide la data en train y test 
+
+sample <-  sample.split(norm1$fraude, SplitRatio = .80)
+train <-  subset(norm1, sample == TRUE)
+test  <-  subset(norm1, sample == FALSE)
+
+
+model <- glm(fraude ~ monto+linea_tc+interes_tc+dcto+cashback+tipo_tc,
+             data = train, family = binomial)
+
+summary(model)$coef
+```  
+
+
+Todas las variables ingresadas en el modelo tienen p-value significativo y no se descarta ninguna    
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Se obtiene la importancia de las variables
+varImp(model)
+```  
+
+Dentro de las variables más importantes en el modelo están:  
+* TIPO DE TARJETA
+* CANTIDAD DE CASHBACK
+* INTERÉS DE TC
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Se calcula el AUC para la data de train
+prob <- predict(model, newdata=train, type="response")
+pred <- prediction(prob, train$fraude)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf)
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+
+
+# Se calcula el AUC para la data de test
+prob <- predict(model, newdata=test, type="response")
+pred <- prediction(prob, test$fraude)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf)
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+
+
+
+```
+
+
+De los valores de AUC, tanto de train y test, se puede ver que no hay un buen poder de discriminación.  
+Esto se puedo ver en el análisis de las variables, en las cuales se ve que las distribuciones de los que sufrieron fraude y los que no son similares.  
+
+Esto sin embargo, podría ser mejorado con técnicas más complejas de machine learning.  
+
+
+
+## 9. Trade-Off del Modelo  
+
+* Al usar esta técnica econométrica para modelar nos da una fácil interpretabilidad de las variables y su aporte.  
+* El modelo nos permite gestionar y tomar mayor acción en las variables de mayor importancia y ver cuánto aumenta la probabilidad de ser fraude.  
+* No requiere muchos recursos para ejecutar y es rápido.  
+* La data no es linealmente separable, por lo que el modelo no tiene mucho poder predictivo.  
+* Rápido para poder implementar para nuevas observaciones
+
+
+## 10. INSIGHTS RELEVANTES
+
+* Las variables en el dataset no ayuda a discriminar los fraudes.  
+* Las variables que mayor aportan son las cualitativas.  
+* Con modelos como RNN se podría lograr mayor AUC pero se perdería interpretabilidad.  
+* En el segmento de afluentes se tendría que priorizar para que tengan un ticket promedio mayor, debido a que tiene mayor capacidad(linea) y se podría generar mayores beneficios.  
+* Se debería buscar más variables como demográficas o históricas para poder evaluarlas e ingresarlas en un nuevo modelo.  
+
+
+
